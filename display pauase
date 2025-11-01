@@ -1,0 +1,18 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using TMPro;
+
+public class dispause : MonoBehaviour
+{
+   public Player player;
+    public TextMeshProUGUI pausenum;
+
+    void Update()// display pause number
+    {
+        if (player != null && pausenum != null)
+        {
+            pausenum.text = player.pauseLimit.ToString();
+        }
+    }
+}
