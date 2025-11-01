@@ -1,0 +1,18 @@
+using System.Collections;
+using System.Collections.Generic;
+using Unity.VisualScripting;
+using UnityEngine;
+
+public class Hurtbox : MonoBehaviour
+{
+    public Player player;
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        //when hutbox overlaps with an obstacle call player's hit funtion
+        if (collision.CompareTag("obstacle"))
+        {
+            player.hit();
+        }
+
+    }
+}
