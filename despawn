@@ -1,0 +1,41 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Despawn : MonoBehaviour
+{
+    public Player player;
+    public float respawnDelay = 3f; 
+    private bool isRespawning = false;
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        //haves all ablities deactivated when player thouches them
+        Debug.Log("Power up gain");
+
+        if (collision.CompareTag("Player"))
+        {
+            GetComponent<SpriteRenderer>().enabled = false;
+            GetComponent<Collider2D>().enabled = false;
+        }
+    }
+
+    void Update()
+    {
+        //reactivates when player dies
+        if (player.damage == true && !isRespawning)
+        {
+            Debug.Log("power up respawn");
+            StartCoroutine(respawn());
+        }
+    }
+
+    IEnumerator respawn()
+    {
+        //delays repawn for player to stop flying 
+        yield return new WaitForSeconds(respawnDelay);
+        GetComponent<SpriteRenderer>().enabled = true;
+        GetComponent<Collider2D>().enabled = true;    
+    }
+
+
+}
