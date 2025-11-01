@@ -1,0 +1,333 @@
+using System.Collections;
+using System.Collections.Generic;
+using Unity.Mathematics;
+using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+using Unity.VisualScripting;
+
+public class Player : MonoBehaviour
+{
+    /*  Player movement */
+    public float speed = 4f;
+    public float acceleration = 10f;
+    private float moveInput;
+
+    /*  JUMP/Grounded Rule */
+    public float jumpForce = 5f;
+    private int maxJumps = 2;
+    private int jumpCount = 0;
+    public LayerMask groundLayer;
+    public Transform groundCheck;
+    public float groundCheckRadius = 0.2f;
+    private Rigidbody2D rb;
+    private bool isGrounded;
+
+    /* Hurtbox/damage Rule */
+    public GameObject hurtBox;
+    public bool damage;
+    public CameraShake cameraShake;
+
+    /*  Respawn Rule */
+    public Transform player;
+    public Vector3 teleportPosition;
+    public float respawnDelay = 1f;
+
+    /* Dash Rule */
+    public float dashForce = 10f;
+    public float dashCooldown = 1f;
+    private bool canDash = true;
+    public bool lookRight;
+
+    /* Pause/Time Stop Rule */
+    public bool timeStop = false;
+    public float collisionIgnoreDuration = 1.5f;
+    private Vector2 storedmovement;
+
+    /* PowerUp Limit Rule*/
+    public int dashLimit = 0;
+    public int jumpLimit = 0;
+    public int pauseLimit = 0;
+    public bool powerGainDelay = false;
+
+    public int lvl = 0;
+
+    public Animator animator;
+    private SpriteRenderer spriteRenderer;
+
+    public AudioClip hitsound;
+    public AudioClip jumpSound;
+    public AudioClip dashSound;
+    public AudioClip pauseSound;
+    private AudioSource audioSource;
+
+    void Start()// Get Player rb
+    {
+        rb = GetComponent<Rigidbody2D>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        audioSource = GetComponent<AudioSource>();
+    }
+
+    void Update()
+    {
+        if (damage == false && !timeStop)//check if player can move
+        {
+            if (Input.GetKeyDown(KeyCode.A))
+            {
+                if (lookRight)
+                {
+                    spriteRenderer.flipX = !spriteRenderer.flipX;
+                }
+                lookRight = false;
+                
+            }
+            if (Input.GetKeyDown(KeyCode.D))// Player dashes last derection inputed
+            {
+                if (!lookRight)
+                {
+                    spriteRenderer.flipX = !spriteRenderer.flipX;
+                }
+                lookRight = true;
+            }
+            canjump(); //call jump function
+            moveInput = Input.GetAxisRaw("Horizontal");
+            if (Input.GetKeyDown(KeyCode.LeftShift) && canDash && dashLimit > 0)
+            {
+                StartCoroutine(Dash()); //call Dash function
+            }
+            if (Input.GetKeyDown(KeyCode.P) && pauseLimit > 0)
+            {
+                StartCoroutine(stopTime()); //call StopTime function 
+            }
+        }
+
+        if (isGrounded)
+        {
+            jumpCount = 0; // can jump?
+        }
+    }
+
+    void FixedUpdate()
+    {
+        if (!damage && !timeStop)
+        {
+            movement(); //movement call
+        }
+        else if (timeStop)
+        {
+            rb.velocity = storedmovement; // stores velocity for pause function
+        }
+    }
+
+    private void canjump()
+    {
+        //checks if the player feet are touching the ground
+        isGrounded = Physics2D.OverlapCircle
+        (groundCheck.position, groundCheckRadius, groundLayer);
+
+        if (Input.GetKeyDown(KeyCode.Space)) //jump input
+        {
+            if (isGrounded)
+            {
+                animator.SetBool("jump", true);
+                audioSource.clip = jumpSound;
+                audioSource.Play();
+                rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+            }
+            else if (jumpCount < maxJumps - 1 && jumpLimit > 0)
+            {
+                animator.SetBool("jump", true);
+                rb.velocity = new Vector2(0f, jumpForce);
+                jumpCount++;
+                jumpLimit--;
+            }
+            StartCoroutine(jumpanim()); 
+        }
+    }
+
+    IEnumerator jumpanim()
+    {
+        yield return new WaitForSeconds(.2f);
+        animator.SetBool("jump", false);
+    }
+
+    private void movement() //who the player moves
+    {
+        animator.SetFloat("speed", Mathf.Abs(rb.velocity.x));
+        float targetVelocityX = moveInput * speed;
+        float velocityX = Mathf.Lerp
+        (rb.velocity.x, targetVelocityX, acceleration * Time.fixedDeltaTime);
+        rb.velocity = new Vector2(velocityX, rb.velocity.y);
+    }
+
+    IEnumerator Dash()
+    {
+        // which way the player Dashes
+        animator.SetBool("dash", true);
+        audioSource.clip = dashSound;
+        audioSource.Play();
+        if (lookRight)
+        {
+            rb.velocity = new Vector2(transform.localScale.x * dashForce, 0f);
+        }
+        if (!lookRight)
+        {
+            rb.velocity = new Vector2(transform.localScale.x * -dashForce, 0f);
+        }
+        canDash = false;
+        dashLimit--;
+        StartCoroutine(dashanim());
+        yield return new WaitForSeconds(dashCooldown); //stops spam
+        canDash = true;
+    }
+
+    IEnumerator dashanim()
+    {
+        yield return new WaitForSeconds(.4f);
+        animator.SetBool("dash", false);
+    }
+
+    IEnumerator stopTime()
+    {
+        //stops mutiple calls
+        if (timeStop) yield break;
+
+        //gets momentum stops inputs and turns off hitbox
+        audioSource.clip = pauseSound;
+        audioSource.Play();
+        storedmovement = rb.velocity;
+        float Grav = rb.gravityScale;
+        rb.gravityScale = 0;
+        hurtBox.SetActive(false);
+        timeStop = true;
+        hurtBox.GetComponent<Hurtbox>().enabled = false;
+        pauseLimit--;
+
+        yield return new WaitForSeconds(collisionIgnoreDuration);
+
+        // resets hitbox and allows inputs
+        rb.gravityScale = Grav;
+        hurtBox.SetActive(true);
+        timeStop = false;
+        hurtBox.GetComponent<Hurtbox>().enabled = true;
+    }
+
+    void OnCollisionEnter2D(Collision2D collision) //red floor check
+    {
+        if (collision.gameObject.CompareTag("badFloor") && timeStop == false)
+        {
+            hit();
+        }
+    }
+
+    void OnTriggerEnter2D(Collider2D collision)
+    {
+        //checks for power ups or goal
+        if (collision.gameObject.CompareTag("Dash") && !powerGainDelay)
+        {
+            dashLimit++;
+            powerGainDelay = true;
+            StartCoroutine(gainDelay());
+        }
+        if (collision.gameObject.CompareTag("Pause") && !powerGainDelay)
+        {
+            pauseLimit++;
+            powerGainDelay = true;
+            StartCoroutine(gainDelay());
+        }
+        if (collision.gameObject.CompareTag("doubleJump") && !powerGainDelay)
+        {
+            jumpLimit++;
+            powerGainDelay = true;
+            StartCoroutine(gainDelay());
+        }
+         if (collision.gameObject.CompareTag("goal") && !damage)
+        {
+            nextlvl();
+        }
+
+    }
+    IEnumerator gainDelay()
+    {
+        //stops player from gain more then one ablity at a time
+        Debug.Log("gaindelay called");
+        yield return new WaitForSeconds(.1f);
+        powerGainDelay = false;
+    }
+
+    public void hit()
+    {
+        //shakes camera and calls repawn function
+        cameraShake.shakeDuration = .4f; // Shake for 1 second = 1.0f
+        audioSource.clip = hitsound;
+        audioSource.Play();
+        Debug.Log("Player damaged by spike!");
+        StartCoroutine(respawn());
+    }
+
+    IEnumerator respawn()
+    {
+        //stops it from repawing more then once
+        //relized could have made this a brake
+        if (!damage)
+        {
+            damage = true;
+            yield return new WaitForSeconds(respawnDelay);
+            //resets movement & ablities
+            rb.velocity = new Vector2(0, 0);
+            player.position = teleportPosition;
+            damage = false;
+            dashLimit = 0;
+            jumpLimit = 0;
+            pauseLimit = 0;
+        }
+
+    }
+    
+    void nextlvl()
+    {
+        //controlls the lvls
+        // yes I know this is inefficent
+        if (lvl == 1)
+        {
+            SceneManager.LoadScene(1);
+        }
+        if (lvl == 2)
+        {
+            SceneManager.LoadScene(2);
+        }
+        if (lvl == 3)
+        {
+            SceneManager.LoadScene(3);
+        }
+        if (lvl == 4)
+        {
+            SceneManager.LoadScene(4);
+        }
+        if (lvl == 5)
+        {
+            SceneManager.LoadScene(5);
+        }
+        if (lvl == 6)
+        {
+            SceneManager.LoadScene(6);
+        }
+        if (lvl == 7)
+        {
+            SceneManager.LoadScene(7);
+        }
+        if (lvl == 8)
+        {
+            SceneManager.LoadScene(8);
+        }
+        if (lvl == 9)
+        {
+            SceneManager.LoadScene(9);
+        }
+        if (lvl ==  10)
+        {
+            SceneManager.LoadScene(10);
+        }
+    }
+}
