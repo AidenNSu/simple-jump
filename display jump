@@ -1,0 +1,18 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using TMPro;
+
+public class disjump : MonoBehaviour
+{
+    public Player player;
+    public TextMeshProUGUI jumpnum;
+
+    void Update()// display jump number 
+    {
+        if (player != null && jumpnum != null)
+        {
+            jumpnum.text = player.jumpLimit.ToString();
+        }
+    }
+}
