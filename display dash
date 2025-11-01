@@ -1,0 +1,18 @@
+using System.Collections;
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+
+public class NewBehaviourScript : MonoBehaviour
+{
+    public Player player;
+    public TextMeshProUGUI dashnum;
+
+    void Update() //display dash number
+    {
+        if (player != null && dashnum != null)
+        {
+            dashnum.text = player.dashLimit.ToString();
+        }
+    }
+}
